@@ -1,11 +1,16 @@
 // Credits to chmcl for initial GMA/TPL support (https://github.com/ch-mcl/)
 
-import { mat4 } from "gl-matrix";
+import { mat4, vec3, vec4 } from "gl-matrix";
 import ArrayBufferSlice from "../ArrayBufferSlice";
+import { drawWorldSpacePoint, drawWorldSpaceText, getDebugOverlayCanvas2D } from "../DebugJunk";
 import { GfxBufferCoalescerCombo } from "../gfx/helpers/BufferHelpers";
 import { GfxDevice } from "../gfx/platform/GfxPlatform";
 import { GfxRenderCache } from "../gfx/render/GfxRenderCache";
-import { GfxRenderInstManager } from "../gfx/render/GfxRenderInstManager";
+import {
+    GfxRenderInstList,
+    GfxRenderInstManager,
+    makeDepthKey,
+} from "../gfx/render/GfxRenderInstManager";
 import {
     compileVtxLoaderMultiVat,
     getAttributeByteSize,
@@ -111,6 +116,7 @@ function generateLoadedVertexData(
 }
 
 const scratchDrawParams = new DrawParams();
+const scratchVec3a = vec3.create();
 export class ShapeInst {
     private material: MaterialInst;
     private bufferCoalescer: GfxBufferCoalescerCombo;
@@ -122,7 +128,7 @@ export class ShapeInst {
         public shapeData: Gma.Shape,
         modelSamplers: SamplerInst[],
         modelAttrs: Gma.ModelAttrs,
-        translucent: boolean
+        private translucent: boolean
     ) {
         const vtxAttr = shapeData.material.vtxAttr;
         const vcd: GX_VtxDesc[] = [];
@@ -172,8 +178,6 @@ export class ShapeInst {
             }
         });
 
-        // TODO(complexplane): Either get rid of GfxBufferCoalescer or go ham and coalesce all shape
-        // buffers in model (is cross-model buffer coalescing possible?)
         this.bufferCoalescer = loadedDataCoalescerComboGfx(device, loadedVertexDatas);
         this.shapeHelpers = this.bufferCoalescer.coalescedBuffers.map(
             (buf, i) =>
@@ -196,27 +200,47 @@ export class ShapeInst {
 
     public prepareToRender(
         device: GfxDevice,
-        renderInstManager: GfxRenderInstManager,
+        instMan: GfxRenderInstManager,
         viewerInput: ViewerRenderInput,
-        viewFromModel: mat4
+        viewFromModel: mat4,
+        instList: GfxRenderInstList
     ) {
-        const template = renderInstManager.pushTemplateRenderInst();
+        const template = instMan.pushTemplateRenderInst();
         const drawParams = scratchDrawParams;
         mat4.copy(drawParams.u_PosMtx[0], viewFromModel);
-        this.material.setOnRenderInst(
-            device,
-            renderInstManager.gfxRenderCache,
-            template,
-            drawParams
-        );
+        this.material.setOnRenderInst(device, instMan.gfxRenderCache, template, drawParams);
 
         for (let i = 0; i < this.shapeHelpers.length; i++) {
-            const inst = renderInstManager.newRenderInst();
+            const inst = instMan.newRenderInst();
             this.shapeHelpers[i].setOnRenderInst(inst);
-            renderInstManager.submitRenderInst(inst);
+
+            // if (this.translucent) {
+            const origin_rt_view = scratchVec3a;
+            vec3.transformMat4(origin_rt_view, this.shapeData.origin, viewFromModel);
+            inst.sortKey = makeDepthKey(origin_rt_view[2], true);
+
+            const inv = mat4.create();
+            mat4.invert(inv, viewerInput.camera.viewMatrix);
+            const poop = vec3.create();
+            vec3.transformMat4(poop, origin_rt_view, inv);
+
+            drawWorldSpacePoint(
+                getDebugOverlayCanvas2D(),
+                viewerInput.camera.clipFromWorldMatrix,
+                poop
+            );
+            drawWorldSpaceText(
+                getDebugOverlayCanvas2D(),
+                viewerInput.camera.clipFromWorldMatrix,
+                poop,
+                origin_rt_view[2].toString()
+            );
+            // }
+
+            instList.submitRenderInst(inst);
         }
 
-        renderInstManager.popTemplateRenderInst();
+        instMan.popTemplateRenderInst();
     }
 
     public destroy(device: GfxDevice): void {

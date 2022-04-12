@@ -69,10 +69,9 @@ type VtxConType4 = {
 };
 
 // GCMF Submesh
-// TODO(complexplane): GPU data probably belongs in ShapeInstance or similar
 export type Shape = {
     material: Material;
-    boundSphereCenter: vec3;
+    origin: vec3; // Point to use for depth sorting I think?
     dlistHeaders: DisplaylistHeader[];
     rawData: ArrayBufferSlice; // TODO(complexplane): Store individual dlist bufs instead
 };
@@ -302,7 +301,7 @@ function parseShape(buffer: ArrayBufferSlice, idx: number): Shape {
     //     dlistHeaders.push(dlistHeader);
     // }
 
-    return { material, boundSphereCenter: boundSphereCenter, dlistHeaders, rawData: buffer };
+    return { material, origin: boundSphereCenter, dlistHeaders, rawData: buffer };
 }
 
 function parseModel(buffer: ArrayBufferSlice, name: string, tpl: AVTpl): Model {

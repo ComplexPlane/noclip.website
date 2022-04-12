@@ -1,7 +1,7 @@
 import { mat4 } from "gl-matrix";
 import { GfxDevice } from "../gfx/platform/GfxPlatform";
 import { GfxRenderCache } from "../gfx/render/GfxRenderCache";
-import { GfxRenderInstManager } from "../gfx/render/GfxRenderInstManager";
+import { GfxRenderInstList, GfxRenderInstManager } from "../gfx/render/GfxRenderInstManager";
 import { GXMaterialHacks } from "../gx/gx_material";
 import { ViewerRenderInput } from "../viewer";
 import * as Gma from "./Gma";
@@ -16,7 +16,7 @@ export class ModelInst {
     constructor(
         device: GfxDevice,
         renderCache: GfxRenderCache,
-        modelData: Gma.Model,
+        private modelData: Gma.Model,
         texCache: TextureHolder
     ) {
         this.samplers = modelData.samplers.map(
@@ -43,12 +43,17 @@ export class ModelInst {
 
     public prepareToRender(
         device: GfxDevice,
-        renderInstManager: GfxRenderInstManager,
+        instMan: GfxRenderInstManager,
         viewerInput: ViewerRenderInput,
+        opaqueInstList: GfxRenderInstList,
+        translucentInstList: GfxRenderInstList,
         viewFromModel: mat4
     ) {
         for (let i = 0; i < this.shapes.length; i++) {
-            this.shapes[i].prepareToRender(device, renderInstManager, viewerInput, viewFromModel);
+            // const instList =
+            //     i < this.modelData.opaqueShapeCount ? opaqueInstList : translucentInstList;
+            const instList = translucentInstList;
+            this.shapes[i].prepareToRender(device, instMan, viewerInput, viewFromModel, instList);
         }
     }
 

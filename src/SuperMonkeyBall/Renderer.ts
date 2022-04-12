@@ -12,6 +12,7 @@ import * as Viewer from "../viewer";
 import { ModelCache } from "./ModelCache";
 import { StageData, World } from "./World";
 import * as UI from "../ui";
+import { GfxRenderInstList } from "../gfx/render/GfxRenderInstManager";
 
 export class Renderer implements Viewer.SceneGfx {
     private renderHelper: GXRenderHelperGfx;
@@ -19,6 +20,8 @@ export class Renderer implements Viewer.SceneGfx {
     private modelCache: ModelCache;
     public textureHolder: UI.TextureListHolder;
     private renderCollision: boolean = false;
+    private opaqueInstList = new GfxRenderInstList();
+    private translucentInstList = new GfxRenderInstList();
 
     constructor(device: GfxDevice, stageData: StageData) {
         this.renderHelper = new GXRenderHelperGfx(device);
@@ -60,22 +63,33 @@ export class Renderer implements Viewer.SceneGfx {
         return [renderHacksPanel];
     }
 
-    private prepareToRender(device: GfxDevice, viewerInput: Viewer.ViewerRenderInput): void {
+    private prepareToRender(
+        device: GfxDevice,
+        viewerInput: Viewer.ViewerRenderInput,
+        opaqueInstList: GfxRenderInstList,
+        translucentInstList: GfxRenderInstList
+    ): void {
         this.world.update(viewerInput);
-        viewerInput.deltaTime;
 
         viewerInput.camera.setClipPlanes(0.1);
         // The GXRenderHelper's pushTemplateRenderInst() sets some stuff on the template inst for
         // us. Use it once, then use the underlying GfxRenderInstManager's pushTemplateRenderInst().
         const template = this.renderHelper.pushTemplateRenderInst();
         fillSceneParamsDataOnTemplate(template, viewerInput);
-        this.world.prepareToRender(device, this.renderHelper.renderInstManager, viewerInput);
+        this.world.prepareToRender(
+            device,
+            this.renderHelper.renderInstManager,
+            viewerInput,
+            opaqueInstList,
+            translucentInstList
+        );
         this.renderHelper.prepareToRender();
         this.renderHelper.renderInstManager.popTemplateRenderInst();
     }
 
     public render(device: GfxDevice, viewerInput: Viewer.ViewerRenderInput) {
-        const renderInstManager = this.renderHelper.renderInstManager;
+        const instMan = this.renderHelper.renderInstManager;
+        instMan.disableSimpleMode();
 
         const mainColorDesc = makeBackbufferDescSimple(
             GfxrAttachmentSlot.Color0,
@@ -97,7 +111,11 @@ export class Renderer implements Viewer.SceneGfx {
             pass.attachRenderTargetID(GfxrAttachmentSlot.Color0, mainColorTargetID);
             pass.attachRenderTargetID(GfxrAttachmentSlot.DepthStencil, mainDepthTargetID);
             pass.exec((passRenderer) => {
-                renderInstManager.drawOnPassRenderer(passRenderer);
+                this.opaqueInstList.drawOnPassRenderer(this.renderHelper.getCache(), passRenderer);
+                this.translucentInstList.drawOnPassRenderer(
+                    this.renderHelper.getCache(),
+                    passRenderer
+                );
             });
         });
         pushAntialiasingPostProcessPass(builder, this.renderHelper, viewerInput, mainColorTargetID);
@@ -106,10 +124,10 @@ export class Renderer implements Viewer.SceneGfx {
             viewerInput.onscreenTexture
         );
 
-        this.prepareToRender(device, viewerInput);
+        this.prepareToRender(device, viewerInput, this.opaqueInstList, this.translucentInstList);
 
         this.renderHelper.renderGraph.execute(builder);
-        renderInstManager.resetRenderInsts();
+        instMan.resetRenderInsts();
     }
 
     public destroy(device: GfxDevice): void {

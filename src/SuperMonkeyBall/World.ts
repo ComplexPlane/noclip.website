@@ -3,7 +3,7 @@ import AnimationController from "../AnimationController";
 import { drawWorldSpacePoint, getDebugOverlayCanvas2D } from "../DebugJunk";
 import { GfxDevice } from "../gfx/platform/GfxPlatform";
 import { GfxRenderCache } from "../gfx/render/GfxRenderCache";
-import { GfxRenderInstManager } from "../gfx/render/GfxRenderInstManager";
+import { GfxRenderInstList, GfxRenderInstManager } from "../gfx/render/GfxRenderInstManager";
 import { invlerp, lerp, MathConstants, smoothstep } from "../MathHelpers";
 import { assert, bisectRight } from "../util";
 import * as Viewer from "../viewer";
@@ -184,13 +184,22 @@ class Itemgroup {
 
     public prepareToRender(
         device: GfxDevice,
-        renderInstManager: GfxRenderInstManager,
-        viewerInput: Viewer.ViewerRenderInput
+        instMan: GfxRenderInstManager,
+        viewerInput: Viewer.ViewerRenderInput,
+        opaqueInstList: GfxRenderInstList,
+        translucentInstList: GfxRenderInstList
     ) {
         const viewFromIg = scratchMat4a;
         mat4.mul(viewFromIg, viewerInput.camera.viewMatrix, this.worldFromIg);
         for (let i = 0; i < this.models.length; i++) {
-            this.models[i].prepareToRender(device, renderInstManager, viewerInput, viewFromIg);
+            this.models[i].prepareToRender(
+                device,
+                instMan,
+                viewerInput,
+                opaqueInstList,
+                translucentInstList,
+                viewFromIg
+            );
         }
     }
 }
@@ -278,12 +287,21 @@ class BgModelInst {
 
     public prepareToRender(
         device: GfxDevice,
-        renderInstManager: GfxRenderInstManager,
-        viewerInput: Viewer.ViewerRenderInput
+        instMan: GfxRenderInstManager,
+        viewerInput: Viewer.ViewerRenderInput,
+        opaqueInstList: GfxRenderInstList,
+        translucentInstList: GfxRenderInstList
     ) {
         const viewFromModel = scratchMat4a;
         mat4.mul(viewFromModel, viewerInput.camera.viewMatrix, this.worldFromModel);
-        this.model.prepareToRender(device, renderInstManager, viewerInput, viewFromModel);
+        this.model.prepareToRender(
+            device,
+            instMan,
+            viewerInput,
+            opaqueInstList,
+            translucentInstList,
+            viewFromModel
+        );
     }
 }
 
@@ -327,14 +345,28 @@ export class World {
 
     public prepareToRender(
         device: GfxDevice,
-        renderInstManager: GfxRenderInstManager,
-        viewerInput: Viewer.ViewerRenderInput
+        instMan: GfxRenderInstManager,
+        viewerInput: Viewer.ViewerRenderInput,
+        opaqueInstList: GfxRenderInstList,
+        translucentInstList: GfxRenderInstList
     ): void {
         for (let i = 0; i < this.itemgroups.length; i++) {
-            this.itemgroups[i].prepareToRender(device, renderInstManager, viewerInput);
+            this.itemgroups[i].prepareToRender(
+                device,
+                instMan,
+                viewerInput,
+                opaqueInstList,
+                translucentInstList
+            );
         }
         for (let i = 0; i < this.bgModels.length; i++) {
-            this.bgModels[i].prepareToRender(device, renderInstManager, viewerInput);
+            this.bgModels[i].prepareToRender(
+                device,
+                instMan,
+                viewerInput,
+                opaqueInstList,
+                translucentInstList
+            );
         }
     }
 
